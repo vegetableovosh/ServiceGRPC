@@ -2,16 +2,18 @@ package config
 
 import (
 	"flag"
-	"github.com/ilyakaznacheev/cleanenv"
 	"os"
 	"time"
+
+	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	Env         string        `yaml:"env" env-required:"local"`
-	StoragePath string        `yaml:"storage_path" env-required:"true"`
-	TokenTTL    time.Duration `yaml:"token_ttl" env-required:"true"`
-	GRPC        GRPCConfig    `yaml:"grpc"`
+	Env            string     `yaml:"env" env-default:"local"`
+	StoragePath    string     `yaml:"storage_path" env-required:"true"`
+	GRPC           GRPCConfig `yaml:"grpc"`
+	MigrationsPath string
+	TokenTTL       time.Duration `yaml:"token_ttl" env-default:"1h"`
 }
 
 type GRPCConfig struct {
@@ -20,19 +22,24 @@ type GRPCConfig struct {
 }
 
 func MustLoad() *Config {
-	path := fetchConfigPath()
-	if path == "" {
-		panic("config file path is empty")
+	configPath := fetchConfigPath()
+	if configPath == "" {
+		panic("config path is empty")
 	}
 
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		panic("config file not found: " + path)
+	return MustLoadPath(configPath)
+}
+
+func MustLoadPath(configPath string) *Config {
+	// check if file exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		panic("config file does not exist: " + configPath)
 	}
 
 	var cfg Config
 
-	if err := cleanenv.ReadConfig(path, &cfg); err != nil {
-		panic("failed to read config: " + err.Error())
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		panic("cannot read config: " + err.Error())
 	}
 
 	return &cfg
@@ -44,13 +51,12 @@ func MustLoad() *Config {
 func fetchConfigPath() string {
 	var res string
 
-	// --config="path/to/config.yaml"
-	flag.StringVar(&res, "config", "", "config file path")
+	flag.StringVar(&res, "config", "", "path to config file")
 	flag.Parse()
 
-	if res != "" {
-		return res
+	if res == "" {
+		res = os.Getenv("CONFIG_PATH")
 	}
 
-	return os.Getenv("CONFIG_PATH")
+	return res
 }
